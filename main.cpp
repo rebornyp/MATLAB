@@ -141,7 +141,7 @@ void display(void)
 	drawRefections();	
 	drawEnvironments();	
 	//drawRefections();	
-	//drawTest();
+	drawTest();
 	glutSwapBuffers();
 }
 
@@ -657,7 +657,7 @@ void explicite() {
 	for(int i=0; i<vs.size(); i++) {
 		point n1 = {vs[i].a, vs[i].b, vs[i].c};
 		dealWith(vs[i].allPoints, vs[i].polygon, n1);
-		testSurfs(i);
+		//testSurfs(i);
 		//testSurfPolygons(vs[i].allPoints, vs[i].polygon, n1);
 	}
 }
@@ -690,30 +690,34 @@ void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &po
 	double k, d;
 	k = (b.y - a.y) / (b.x - a.x);
 	d = a.y - k * a.x;
-	double dist = DistanceOfPointToLine(&a, &b, &pmax);
-	double newdist, maxDis = -1;
+	double maxDis = DistanceOfPointToLine(&a, &b, &pmax), maxMid = distanceOfTwoPoints(pmax, mid);
+	double newdist;
+	//printf("point0(%f, %f, %f)\n", p[0].x, p[0].y, p[0].z);
 	for (int i = 1; i < p.size(); ++i)
 	{
 		newdist = DistanceOfPointToLine(&a, &b, &p[i]);
-		if (newdist - dist > threHold)
+		//printf("point%d(%f, %f, %f), 距离直线：%f\n", i, p[i].x, p[i].y, p[i].z, newdist);
+		if (newdist - maxDis > threHold)
 		{
+			//printf("替换最大距离点了...：point%d(%f, %f, %f), 距离直线：%f\n", i, p[i].x, p[i].y, p[i].z, newdist);
 			pmax.x = p[i].x;
 			pmax.y = p[i].y;
 			pmax.z = p[i].z;
-			maxDis = distanceOfTwoPoints(pmax, mid);
+			maxDis = newdist;
 		}
-		else if (fabs(newdist - dist) < threHold)
+		else if (fabs(newdist - maxDis) < threHold)
 		{	//选择距离线段ab中点最近的那个
 			double dis1 = distanceOfTwoPoints(p[i], mid);
-			if (maxDis != -1 && dis1 < maxDis)
+			if (dis1 < maxMid)
 			{
 				pmax.x = p[i].x;
 				pmax.y = p[i].y;
 				pmax.z = p[i].z;
+				maxMid = dis1;
 			}
 		}
 	}
-	printf("Pmax(%f, %f, %f)\n", pmax.x, pmax.y, pmax.z);
+	//printf("Pmax(%f, %f, %f)\n", pmax.x, pmax.y, pmax.z);
 	polygon.push_back(pmax);
 
 	Point mid1 = {(pmax.x+a.x)/2, (pmax.y+a.y)/2, (pmax.z+a.z)/2};
@@ -733,12 +737,12 @@ void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &po
 		}
 
 	}
-	printf("v1.size=%d, v2.size=%d\n", p1.size(), p2.size());
+	//printf("v1.size=%d, v2.size=%d\n", p1.size(), p2.size());
 	/* 递归寻找Pmax */
 	FindPoint2(p1, pmax, a, mid1, polygon);
-	printf("左边的算完了");
+	//printf("左边的算完了");
 	FindPoint2(p2, pmax, b, mid2, polygon);
-	printf("右边的算完了");
+	//printf("右边的算完了");
 	//free(&p1);
 	//free(&p2);
 }
@@ -812,11 +816,11 @@ void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
 		if(value > threHold) p1.push_back(allPoints[i]);
 		else if(value < -threHold) p2.push_back(allPoints[i]);
 	}
-	printf("left-part:%d, right-part:%d\n", p1.size(), p2.size());
+	//printf("left-part:%d, right-part:%d\n", p1.size(), p2.size());
 	FindPoint2(p1, a, b, mid, polygon);
-	printf("左边的算完了~~~~~");
+	//printf("左边的算完了~~~~~");
 	FindPoint2(p2, a, b, mid, polygon);
-	printf("两边都算完了~~我猜是看不到这一句的把。~~~");
+	//printf("两边都算完了~~我猜是看不到这一句的把。~~~");
 }
 
 
@@ -824,6 +828,18 @@ void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
 
 
 void drawTest() {
+	rValue = 1.0f;
+	gValue = 1.0f;
+	bValue = 0.0f;
+	pointSize = 1.0f;
+	for(int i=0; i<vp.size(); i++) {
+		drawPoint(vp[i]);
+	}
+
+	rValue = 1.0f;
+	gValue = 0.0f;
+	bValue = 0.0f;
+	lineWidth = 5.0f;
 	for (int i=0; i<vtemp.size(); i++) {
 		for(int j=i+1; j<vtemp.size(); j++) {
 			drawLines(vtemp[i], vtemp[j]);
@@ -851,7 +867,7 @@ void testPoints() {
 		}
 	}
 
-}
+} 
 
 void testSurfPolygons(vector<point> &allPoints, vector<point> &polygon, point n1) {
 	/*for(int i=0; i<allPoints.size(); i++) {
@@ -864,17 +880,26 @@ void testSurfPolygons2() {
 	vector<point> v, polygon;
 	scanf("%d", &n);
 	for(int i=0; i<n; i++) {
-		point p = {};
-		int x, y, z;
-		scanf("%d %d %d", &x, &y, &z);
-		p.x = x * 1.0;
-		p.y = y * 1.0;
-		p.z = z * 1.0;
-		v.push_back(p);
+		for(int j=0; j<n; j++) {
+			point p = {i*.1, j*.1, 0};
+			/*int x, y, z;
+			scanf("%d %d %d", &x, &y, &z);
+			p.x = x * 1.0;
+			p.y = y * 1.0;
+			p.z = z * 1.0;*/
+			vp.push_back(p);
+		}
 	}
+	for(int i=0; i<n; i++) {
+		for(int j=0; j<n; j++) {
+			point p = {i*-.1, j*-.1, 0};
+			vp.push_back(p);
+		}
+	}
+
 	point n1 = {0, 0, 1.0};
-	dealWith(v, vtemp, n1);
-	for(int i=0; i<polygon.size(); i++) {
+	dealWith(vp, vtemp, n1);
+	for(int i=0; i<vtemp.size(); i++) {
 		//printf("point%d:(%f, %f, %f)\n", i, polygon[i].x, polygon[i].y, polygon[i].z);
 		printf("point%d:(%f, %f, %f)\n", i, vtemp[i].x, vtemp[i].y, vtemp[i].z);
 	}
