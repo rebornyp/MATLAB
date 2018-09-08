@@ -4,20 +4,23 @@
 #include <GL/glu.h>
 #include <glut.h>
 #include <vector>
+#include <algorithm>
 using namespace std;
 
 #define pi 3.1415926
 #define threHold 0.001
 
-struct point {
+typedef struct point {
 	double x, y, z;
-};
+}Point;
 
 struct surf {
 	double xmin, xmax, ymin, ymax, zmin, zmax;
 	double a,b,c,d;
 	bool isGate;
 	double gxmin, gxmax, gymin, gymax, gzmin, gzmax;
+	vector<point> allPoints;
+	vector<point> polygon;
 };
 
 struct lines {
@@ -37,7 +40,7 @@ void drawLines();
 void dataPrepare();
 void drawSurfaces();
 void testPoints();
-void testSurfs();
+void testSurfs(int);
 void drawTest();
 void drawRefections();
 void initMultipleLight();
@@ -53,21 +56,39 @@ void initSurfs();
 void createSphereArray(int num, double r);
 void initSingleLight();
 int validate(point cross, surf temp);
+void explicite();
+void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1);
+void drawPolygons();
+double DistanceOfPointToLine(Point* a, Point* b, Point* s);
+double distanceOfTwoPoints(Point a, Point b);
+void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon);
+void testSurfPolygons(vector<point> &p, vector<point> &polygon, point n1);
+void testSurfPolygons2();
+void drawRefectionTracks();
+void drawRefectionPoints();
+void drawRefectionPolygons();
+
 
 GLint mx,my; //position of mouse
 GLint m_state=0; //mouse usage
 GLfloat x_angle=0.0f, y_angle=0.0f; //angle of eye
 GLfloat dist=10.0f; //distance from the eye
-double lineWidth = 0.01;
+double lineWidth = 0.01, pointSize = 0.1;
 vector<point> vp, vtemp;
-vector<surf> vs; // ±£´æËùÓĞÆ½ÃæµÄÊı×é
-vector<lines> vls;
+vector<surf> vs; // ä¿å­˜æ‰€æœ‰å¹³é¢çš„æ•°ç»„
+vector<lines> vls; // ä¿å­˜æ‰€æœ‰åå°„è·¯å¾„ï¼ˆå«ç¢°æ’ç‚¹ä¿¡æ¯ï¼‰çš„æ•°ç»„ï¼›
 double moveLen = 1.0, width=2.0, swidth=0.5;
-bool decrease = true;
+bool decrease = false;
 double percent = 0.9;
+GLfloat rValue = 1.0f, gValue = 1.0f, bValue = 1.0f;
 
 
-// Ö÷º¯Êı
+bool cmp(point a, point b) {
+	if(a.x != b.x) return a.x < b.x;
+	else return a.y < b.y;
+}
+
+// ä¸»å‡½æ•°
 int main(int argc,char **argv)
 {
 	glutInit(&argc, argv);
@@ -76,8 +97,8 @@ int main(int argc,char **argv)
 	glutInitWindowPosition(100,0);
 	glutCreateWindow("RFID-model views");
 	init();
-
-	dataPrepare(); //×¼±¸Ò»Ğ©Êı¾İ
+	//testSurfPolygons2();
+	dataPrepare(); //å‡†å¤‡ä¸€äº›æ•°æ®
 
 	printf("0 keydown means control the angle of the eye\n");
 	printf("1 keydown means control the distance of the eye\n");
@@ -91,7 +112,7 @@ int main(int argc,char **argv)
 	return 0;
 }
 
-//Ö÷ÏÔÊ¾º¯Êı
+//ä¸»æ˜¾ç¤ºå‡½æ•°
 void display(void)
 {
 	int i, j;
@@ -116,7 +137,7 @@ void display(void)
 	glRotatef(x_angle, 1.0f, 0.0f, 0.0f);
 	glRotatef(y_angle, 0.0f, 1.0f, 0.0f);
 
-	//ÏÔÊ¾×ø±êÖá¼°ÖÜÎ§»·¾³
+	//æ˜¾ç¤ºåæ ‡è½´åŠå‘¨å›´ç¯å¢ƒ
 	drawRefections();	
 	drawEnvironments();	
 	//drawRefections();	
@@ -124,7 +145,7 @@ void display(void)
 	glutSwapBuffers();
 }
 
-//´´Á¢Ò»¿ªÊ¼ÇòÃæµÄËùÓĞ×ø±ê¸öÊı¼°Çò°ë¾¶ĞÅÏ¢
+//åˆ›ç«‹ä¸€å¼€å§‹çƒé¢çš„æ‰€æœ‰åæ ‡ä¸ªæ•°åŠçƒåŠå¾„ä¿¡æ¯
 void createSphereArray(int num, double r) {
 	double x,y,z, l1,l2,step1, step2;
 	l2=0;
@@ -145,17 +166,17 @@ void createSphereArray(int num, double r) {
 	}	
 }
 
-//³õÊ¼»¯º¯Êı
+//åˆå§‹åŒ–å‡½æ•°
 void init(void)
 {
 	glEnable(GL_MAP2_VERTEX_3);
 	glEnable(GL_DEPTH_TEST);
-	//glColor4f(1.0f, 1.0f, 1.0f, 0.5f);//ÑÕÉ«0.5 alphaÖµ
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);//»ìºÏº¯Êı
+	//glColor4f(1.0f, 1.0f, 1.0f, 0.5f);//é¢œè‰²0.5 alphaå€¼
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);//æ··åˆå‡½æ•°
 	glEnable(GL_BLEND);
 }
 
-//²¶×½Êó±êÒÆ¶¯º¯Êı
+//æ•æ‰é¼ æ ‡ç§»åŠ¨å‡½æ•°
 void motion(int x, int y)
 {
 	GLint dx,dy; //offset of mouse;
@@ -177,13 +198,13 @@ void motion(int x, int y)
 	glutPostRedisplay();
 }
 
-//ÖØ»æÖÆº¯Êı
+//é‡ç»˜åˆ¶å‡½æ•°
 void reshape(int w, int h)
 {
 	glViewport(0, 0, (GLint)w, (GLint)h);
 }
 
-//¼üÅÌÉèÖÃº¯Êı
+//é”®ç›˜è®¾ç½®å‡½æ•°
 void keyboard(unsigned char key, int x, int y)
 {
 	switch(key)
@@ -199,27 +220,27 @@ void keyboard(unsigned char key, int x, int y)
 	}
 }
 
-//Êó±êÒÆ¶¯º¯Êı
+//é¼ æ ‡ç§»åŠ¨å‡½æ•°
 void mouse(int button, int state, int x, int y)
 {
 	mx = (GLint)x;
 	my = (GLint)y;
 }
 
-//»æÖÆ×ø±êÖáº¯Êı
+//ç»˜åˆ¶åæ ‡è½´å‡½æ•°
 void drawCoordinates(void)
 {
-	glColor3f(1.0f,0.0f,0.0f); //»­ºìÉ«µÄxÖá
+	glColor3f(1.0f,0.0f,0.0f); //ç”»çº¢è‰²çš„xè½´
 	glBegin(GL_LINES);
 		glVertex3f(0.0f, 0.0f, 0.0f);
 		glVertex3f(1.0f, 0.0f, 0.0f);
 	glEnd();
-	glColor3f(0.0,1.0,0.0); //»­ÂÌÉ«µÄyÖá
+	glColor3f(0.0,1.0,0.0); //ç”»ç»¿è‰²çš„yè½´
 	glBegin(GL_LINES);
 		glVertex3f(0.0f, 0.0f, 0.0f);
 		glVertex3f(0.0f, 1.0f, 0.0f);
 	glEnd();
-	glColor3f(0.0,0.0,1.0); //»­À¶É«µÄzÖá
+	glColor3f(0.0,0.0,1.0); //ç”»è“è‰²çš„zè½´
 	glBegin(GL_LINES);
 		glVertex3f(0.0f, 0.0f, 0.0f);
 		glVertex3f(0.0f, 0.0f, 1.0f);
@@ -227,9 +248,9 @@ void drawCoordinates(void)
 
 }
 
-//»æÖÆÁ½µãÖ±Ïßº¯Êı
+//ç»˜åˆ¶ä¸¤ç‚¹ç›´çº¿å‡½æ•°
 void drawLines(point p1, point p2) {
-	glColor3f( 1.0, 1.0, 0.0 );
+	glColor3f( rValue, gValue, bValue);
 	glLineWidth(lineWidth);
 	glBegin(GL_LINES);
 		glVertex3f( p1.x, p1.y, p1.z );
@@ -237,16 +258,16 @@ void drawLines(point p1, point p2) {
 	glEnd();
 }
 
-//»æÖÆÒ»¸öµãº¯Êı
+//ç»˜åˆ¶ä¸€ä¸ªç‚¹å‡½æ•°
 void drawPoint(point p) {
-	glPointSize(5.0);
-	glColor3f( 1.0, 1.0, 0.0 );
+	glPointSize(pointSize);
+	glColor3f( rValue, gValue, bValue);
 	glBegin(GL_POINTS);
 		glVertex3f(p.x, p.y, p.z);
 	glEnd();
 }
 
-//³õÊ¼»¯»·¾³Æ½ÃæĞÅÏ¢£»
+//åˆå§‹åŒ–ç¯å¢ƒå¹³é¢ä¿¡æ¯ï¼›
 void initSurfs() {
 	struct surf sright = {width+moveLen,width+moveLen,-width/2,width/2,-width/2,width/2,1,0,0,-width-moveLen};
 	vs.push_back(sright);
@@ -260,13 +281,21 @@ void initSurfs() {
 	vs.push_back(sback);
 	struct surf sleft = {moveLen,moveLen,-width/2,width/2,-width/2,width/2,1,0,0,-moveLen, true,moveLen,moveLen,-swidth/2,swidth/2,-swidth/2,swidth/2};
 	vs.push_back(sleft);
+
+	// ä¸‰è§’ç‰‡æ›²é¢ä¿¡æ¯ï¼›
+	//struct surf triangle = {};
+
 }
 
-// »æÖÆ»·¾³Æ½ÃæĞÅÏ¢
+void initSurfs2() {
+
+}
+
+// ç»˜åˆ¶ç¯å¢ƒå¹³é¢ä¿¡æ¯
 void drawSurfaces() {
 	
 	glColor4f( 0.5f, 0.5f, 0.5f,0.5f );
-	//»æÖÆ±³ºóÃæ
+	//ç»˜åˆ¶èƒŒåé¢
 	glBegin( GL_QUADS );
 		glVertex3f( width+moveLen, width/2, -width/2 );
 		glVertex3f( width+moveLen, width/2, width/2 );
@@ -274,28 +303,28 @@ void drawSurfaces() {
 		glVertex3f( width+moveLen, -width/2, -width/2 );
 	glEnd();
 	glColor4f( 0.8f, 0.8f, 0.8f,0.5f );
-	//»æÖÆÉÏÃæ
+	//ç»˜åˆ¶ä¸Šé¢
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, width/2, -width/2 );
 		glVertex3f( moveLen, width/2, width/2 );
 		glVertex3f( width+moveLen, width/2, width/2 );
 		glVertex3f( width+moveLen, width/2, -width/2 );
 	glEnd();
-	//»æÖÆÏÂÃæ
+	//ç»˜åˆ¶ä¸‹é¢
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, -width/2, -width/2 );
 		glVertex3f( moveLen, -width/2, width/2 );
 		glVertex3f( width+moveLen, -width/2, width/2 );
 		glVertex3f( width+moveLen, -width/2, -width/2 );
 	glEnd();
-	////»æÖÆÇ°Ãæ
+	////ç»˜åˆ¶å‰é¢
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, width/2, width/2 );
 		glVertex3f( width+moveLen, width/2, width/2 );
 		glVertex3f( width+moveLen, -width/2, width/2 );
 		glVertex3f( moveLen, -width/2, width/2 );
 	glEnd();
-	////»æÖÆ±³ºóÃæ
+	////ç»˜åˆ¶èƒŒåé¢
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, width/2, -width/2 );
 		glVertex3f( width+moveLen, width/2, -width/2 );
@@ -303,7 +332,7 @@ void drawSurfaces() {
 		glVertex3f( moveLen, -width/2, -width/2 );
 	glEnd();
 
-	//»æÖÆÕıÃæ
+	//ç»˜åˆ¶æ­£é¢
 	glColor4f( 1.0f,1.0f,1.0f,0.5f);
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, -width/2, -width/2 );
@@ -335,7 +364,7 @@ void drawSurfaces() {
 
 }
 
-//»æÖÆÁ¢·½Ìå±ß¿òÖ±Ïß
+//ç»˜åˆ¶ç«‹æ–¹ä½“è¾¹æ¡†ç›´çº¿
 void drawLines(){
 	glColor3f( 0.0, 0.0, 0.0 );
 	glLineWidth(lineWidth);
@@ -368,7 +397,7 @@ void drawLines(){
 		glVertex3f( width+moveLen, width/2, -width/2 );
 
 
-		//ÄÚ¿ò
+		//å†…æ¡†
 		glVertex3f( moveLen, -swidth/2 , -swidth/2);
 		glVertex3f( moveLen, -swidth/2 , swidth/2);
 		glVertex3f( moveLen, -swidth/2 , swidth/2);
@@ -381,26 +410,65 @@ void drawLines(){
 	glEnd();
 }
 
-//»æÖÆ»·¾³ĞÅÏ¢
+//ç»˜åˆ¶ç¯å¢ƒä¿¡æ¯
 void drawEnvironments() {
-	drawCoordinates(); // »æÖÆ×ø±êÖá
-	drawSurfaces(); // »æÖÆÆ½ÃæĞÅÏ¢
-	drawLines(); // »æÖÆÆ½ÃæµÄÂÖÀªÖ±Ïß
+	drawCoordinates(); // ç»˜åˆ¶åæ ‡è½´
+	drawSurfaces(); // ç»˜åˆ¶å¹³é¢ä¿¡æ¯
+	drawLines(); // ç»˜åˆ¶å¹³é¢çš„è½®å»“ç›´çº¿
+
+	drawPolygons();
 }
 
-//ºóÆÚ»æÖÆÕÛÉäÏßµÄº¯Êı
-void drawRefections() {
-	glColor3f( 1.0, 1.0, 0.0 );
-	glLineWidth(0.01);
+void drawPolygons() {
+
+}
+
+
+void drawRefectionTracks() {
+	rValue = 1.0f;
+	gValue = 1.0f;
+	bValue = 0.0f;
+	lineWidth = 0.1f;
 	for (int i=0; i<vls.size(); i++) {
 		for(int j=0; j<vls[i].inner.size()-1; j++) {
 			drawLines(vls[i].inner[j], vls[i].inner[j+1]);
 		}
-
 	}
 }
 
-// ´ÓÈë¿ÚÉäÈë¶à¸úÈëÉä¹âÏß£»
+void drawRefectionPoints() {
+	rValue = 1.0f;
+	gValue = 1.0f;
+	bValue = 0.0f;
+	pointSize = 2.0f;
+	for (int i=0; i<vls.size(); i++) {
+		for(int j=0; j<vls[i].inner.size(); j++) {
+			drawPoint(vls[i].inner[j]);
+		}
+	}
+}
+
+void drawRefectionPolygons() {
+	rValue = 1.0f;
+	gValue = 0.0f;
+	bValue = 0.0f;
+	lineWidth = 5.0f;
+	for(int i=0; i<vs.size(); i++) {
+		for(int j=0; j<vs[i].polygon.size(); j++) {
+			for(int k=j+1; k<vs[i].polygon.size(); k++)
+				drawLines(vs[i].polygon[j], vs[i].polygon[k]);
+		}
+	}
+}
+
+//åæœŸç»˜åˆ¶æŠ˜å°„çº¿çš„å‡½æ•°
+void drawRefections() {
+	//drawRefectionTracks();
+	drawRefectionPoints();
+	drawRefectionPolygons();
+}
+
+// ä»å…¥å£å°„å…¥å¤šè·Ÿå…¥å°„å…‰çº¿ï¼›
 void initPoints() {
 	for (int i=0; i<vp.size(); i++) {
 		double k = vp[i].x / moveLen;
@@ -414,23 +482,26 @@ void initPoints() {
 	}	
 }
 
-//Êı¾İ×¼±¸º¯Êı
+//æ•°æ®å‡†å¤‡å‡½æ•°
 void dataPrepare(){
-	//createSphereArray(20, 6); //»æÖÆÇòÃæµÄËùÓĞµã×ø±ê
-	initSurfs(); //´æÈë³õÊ¼»·¾³Æ½ÃæĞÅÏ¢
-	//initPoints(); //½ÚÑ¡ÈëÉäÖ±ÏßµÄµãĞÅÏ¢
+	//createSphereArray(20, 6); //ç»˜åˆ¶çƒé¢çš„æ‰€æœ‰ç‚¹åæ ‡
+	initSurfs(); //å­˜å…¥åˆå§‹ç¯å¢ƒå¹³é¢ä¿¡æ¯
+	//initSurfs2(); // æ¢å…¶ä»–çš„å¹³é¢åœºæ™¯
+	//initPoints(); //èŠ‚é€‰å…¥å°„ç›´çº¿çš„ç‚¹ä¿¡æ¯
 	initMultipleLight();
 	//initSingleLight();
 	//testSurfs();
 	//testPoints();
-	analyze();
+	analyze(); // å¾—å‡ºäº†æ‰€æœ‰çš„åå°„ç»è¿‡ç‚¹çš„ä¿¡æ¯ï¼›
+	explicite();
+
 }
 
-//²âÊÔÈëÉäÏßµÄº¯Êı
+//æµ‹è¯•å…¥å°„çº¿çš„å‡½æ•°
 void initMultipleLight() {
-	double k = 6;
-	struct point p1={0,0.3,0};
-	int n = 10;
+	double k = 5;
+	struct point p1={0,0.8,0.9};
+	int n = 20;
 	double step = int(0.5*100/n)/100.0;
 	for (double i=-0.25; i<=0.25; i+=step) {
 		for (double j=-0.25; j<=0.25; j+=step) {
@@ -446,11 +517,11 @@ void initMultipleLight() {
 	}
 }
 
-//²úÉúµ¥¸ùÈëÉäÏßµÄ·½·¨
+//äº§ç”Ÿå•æ ¹å…¥å°„çº¿çš„æ–¹æ³•
 void initSingleLight() {
-	double k = 10;
+	double k = 6;
 	struct point p1={0,0.3,0};
-	struct point p2={(k+1)*moveLen-k*p1.x, (k+1)*-0.15-k*p1.y, (k+1)*0-k*p1.z};
+	struct point p2={(k+1)*moveLen-k*p1.x, (k+1)*-0.1-k*p1.y, (k+1)*0-k*p1.z};
 	struct lines l = {};
 	l.inner.push_back(p1);
 	l.inner.push_back(p2);
@@ -458,11 +529,11 @@ void initSingleLight() {
 }
 
 /**
-* ÑéÖ¤½»µãÊÇ·ñÔÚÄ³Æ½ÃæÖ®ÄÚµÄº¯Êı£»
+* éªŒè¯äº¤ç‚¹æ˜¯å¦åœ¨æŸå¹³é¢ä¹‹å†…çš„å‡½æ•°ï¼›
 **/
 int validate(point cross, surf temp) {
-	//printf("ºÍ»·¾³Åö×²½»µã×ø±êÊÇ£º(%f,%f,%f)\n", cross.x,cross.y,cross.z);
-	//printf("Åö×²ÃæĞÅÏ¢x£º[%.2f %.2f]£¬y£º[%.2f %.2f]£¬z£º[%.2f %.2f]\n", temp.xmin,temp.xmax,temp.ymin,temp.ymax,temp.zmin,temp.zmax);
+	//printf("å’Œç¯å¢ƒç¢°æ’äº¤ç‚¹åæ ‡æ˜¯ï¼š(%f,%f,%f)\n", cross.x,cross.y,cross.z);
+	//printf("ç¢°æ’é¢ä¿¡æ¯xï¼š[%.2f %.2f]ï¼Œyï¼š[%.2f %.2f]ï¼Œzï¼š[%.2f %.2f]\n", temp.xmin,temp.xmax,temp.ymin,temp.ymax,temp.zmin,temp.zmax);
 	//printf("welcome to come here....\n");
 	if(temp.xmin == temp.xmax && abs(cross.x - temp.xmin) > threHold) return 0;
 	//printf("1");
@@ -479,7 +550,7 @@ int validate(point cross, surf temp) {
 	return 1;
 }
 
-//¼ÆËãp1ºÍp2ÓëÃæÓòsÖ®¼äµÄ½»µã×ø±êº¯Êı£¬·µ»Ø½»µã temp
+//è®¡ç®—p1å’Œp2ä¸é¢åŸŸsä¹‹é—´çš„äº¤ç‚¹åæ ‡å‡½æ•°ï¼Œè¿”å›äº¤ç‚¹ temp
 point getCross(point p1, point p2, surf s) {
 	struct point temp = {};
 	double k = (s.a*p1.x+s.b*p1.y+s.c*p1.z+s.d)/(s.a*(p1.x-p2.x)+s.b*(p1.y-p2.y)+s.c*(p1.z-p2.z));
@@ -493,8 +564,8 @@ point getCross(point p1, point p2, surf s) {
 }
 
 /*
-*  ÓĞÅö×²·µ»Ø0£¬²¢°Ñ½»²æµãĞÅÏ¢±£´æÔÚhpÀïÃæ£¬¾µÏñµãĞÅÏ¢±£´æÔÚnextÀï£¬·ñÔò·µ»Ø1£»
-*  p1ÊÇµÚÒ»¸öµã£¬p2ÊÇµÚ¶ş¸öµã£¬hpÊÇ½»²æµã£¬nextÊÇÏÂÒ»¸öÕÛÉäµã£¬
+*  æœ‰ç¢°æ’è¿”å›0ï¼Œå¹¶æŠŠäº¤å‰ç‚¹ä¿¡æ¯ä¿å­˜åœ¨hpé‡Œé¢ï¼Œé•œåƒç‚¹ä¿¡æ¯ä¿å­˜åœ¨nexté‡Œï¼Œå¦åˆ™è¿”å›1ï¼›
+*  p1æ˜¯ç¬¬ä¸€ä¸ªç‚¹ï¼Œp2æ˜¯ç¬¬äºŒä¸ªç‚¹ï¼Œhpæ˜¯äº¤å‰ç‚¹ï¼Œnextæ˜¯ä¸‹ä¸€ä¸ªåå°„ç‚¹ï¼Œ
 */
 int collision(point p1, point p2, struct point *hp, struct point *next, int index) {
 	for (int i=0; i<vs.size(); i++) {
@@ -502,7 +573,7 @@ int collision(point p1, point p2, struct point *hp, struct point *next, int inde
 		double result = (temp.a * p1.x + temp.b * p1.y + temp.c * p1.z + temp.d) * (temp.a * p2.x + temp.b * p2.y + temp.c * p2.z + temp.d);
 		
 		if (result <= 0) {
-			//printf("Åö×²ÁË¡£¡£¡£\n");
+			//printf("ç¢°æ’äº†ã€‚ã€‚ã€‚\n");
 			int size = vls[index].surfIndex.size();
 			if (result == 0) {
 				if (size >=1 && vls[index].surfIndex[size-1] == i) continue;
@@ -510,17 +581,21 @@ int collision(point p1, point p2, struct point *hp, struct point *next, int inde
 			} 
 			struct point cross = getCross(p1, p2, temp);
 
-			//printf("ºÍ»·¾³Åö×²½»µã×ø±êÊÇ£º(%.2f,%.2f,%.2f)\n", cross.x,cross.y,cross.z);
-			//printf("ºÍ»·¾³Åö×²½»µã×ø±êÊÇ£º(%f,%f,%f)\n", cross.x,cross.y,cross.z);
+			//printf("å’Œç¯å¢ƒç¢°æ’äº¤ç‚¹åæ ‡æ˜¯ï¼š(%.2f,%.2f,%.2f)\n", cross.x,cross.y,cross.z);
+			//printf("å’Œç¯å¢ƒç¢°æ’äº¤ç‚¹åæ ‡æ˜¯ï¼š(%f,%f,%f)\n", cross.x,cross.y,cross.z);
 			
-			//printf("Åö×²ÃæĞÅÏ¢x£º[%.2f %.2f]£¬y£º[%.2f %.2f]£¬z£º[%.2f %.2f]\n", temp.xmin,temp.xmax,temp.ymin,temp.ymax,temp.zmin,temp.zmax);
+			//printf("ç¢°æ’é¢ä¿¡æ¯xï¼š[%.2f %.2f]ï¼Œyï¼š[%.2f %.2f]ï¼Œzï¼š[%.2f %.2f]\n", temp.xmin,temp.xmax,temp.ymin,temp.ymax,temp.zmin,temp.zmax);
+			
+			//è‹¥æ˜¯å‰åéƒ½åŒä¸€å¹³é¢åˆ™ä¸å…è®¸
+			if(vls[index].surfIndex.size() > 0 && i == vls[index].surfIndex.back()) continue;
+			
 			if (validate(cross, temp)) {
-					//printf("Åö×²½»µãÊÇÔÚÅö×²ÃæµÄ×Ü·¶Î§ÄÚÁË,²¢ÇÒÅö×²ÃæÊÇ");
-					//printf(temp.isGate ? "³ö¿ÚÇúÃæ\n":"ÆÕÍ¨ÇúÃæ\n");
+					//printf("ç¢°æ’äº¤ç‚¹æ˜¯åœ¨ç¢°æ’é¢çš„æ€»èŒƒå›´å†…äº†,å¹¶ä¸”ç¢°æ’é¢æ˜¯");
+					//printf(temp.isGate ? "å‡ºå£æ›²é¢\n":"æ™®é€šæ›²é¢\n");
 					if (temp.isGate && cross.x >= temp.gxmin && cross.x <= temp.gxmax && 
 						cross.y >= temp.gymin && cross.y <= temp.gymax &&
 						cross.z >= temp.gzmin && cross.z <= temp.gzmax) continue;
-				//printf("Åö×²½»µãÊÇÔÚÅö×²ÃæµÄÓĞĞ§·¶Î§ÄÚÁË\n");
+				//printf("ç¢°æ’äº¤ç‚¹æ˜¯åœ¨ç¢°æ’é¢çš„æœ‰æ•ˆèŒƒå›´å†…äº†\n");
 				hp->x = cross.x;
 				hp->y = cross.y;
 				hp->z = cross.z;
@@ -538,8 +613,9 @@ int collision(point p1, point p2, struct point *hp, struct point *next, int inde
 				//next->x=int(next->x*100+0.5)/100.0;
 				//next->y=int(next->y*100+0.5)/100.0;
 				//next->z=int(next->z*100+0.5)/100.0;
-				//printf("¾µÏñµãÊÇ£¨%f %f %f£©,Åö×²ÃæÊÇµÚ%d¸öÆ½Ãæ\n", next->x, next->y,next->z,i);
+				//printf("é•œåƒç‚¹æ˜¯ï¼ˆ%f %f %fï¼‰,ç¢°æ’é¢æ˜¯ç¬¬%dä¸ªå¹³é¢\n", next->x, next->y,next->z,i);
 				vls[index].surfIndex.push_back(i);
+				vs[i].allPoints.push_back(*hp);
 				return 0;
 			}			
 		}
@@ -547,21 +623,21 @@ int collision(point p1, point p2, struct point *hp, struct point *next, int inde
 	return 1;
 }
 
-//Ñ­»·ÕÛÉäº¯Êı
+//å¾ªç¯æŠ˜å°„å‡½æ•°
 void analyze() {
 	int c = 3;
 	for (int i=0; i<vls.size(); i++) {
-		//printf("µÚ%dÌõÖ±Ïß...\n", i);
+		//printf("ç¬¬%dæ¡ç›´çº¿...\n", i);
 		int index = 0;
 		struct point hp, next;
 		struct lines line = vls[i];
 		while (index < vls[i].inner.size()-1) {
 			//if (index > c) break;
-			//printf("µÚ¼¸¸öµã£º%d\n", index);
-			/*printf("Ö±ÏßÆğÊ¼ºÍÖÕÖ¹Á½µã·Ö±ğÊÇ£¨%.2f, %.2f, %.2f£©£¬£¨%.2f, %.2f, %.2f£©\n", vls[i].inner[index].x, vls[i].inner[index].y, vls[i].inner[index].z,
+			//printf("ç¬¬å‡ ä¸ªç‚¹ï¼š%d\n", index);
+			/*printf("ç›´çº¿èµ·å§‹å’Œç»ˆæ­¢ä¸¤ç‚¹åˆ†åˆ«æ˜¯ï¼ˆ%.2f, %.2f, %.2fï¼‰ï¼Œï¼ˆ%.2f, %.2f, %.2fï¼‰\n", vls[i].inner[index].x, vls[i].inner[index].y, vls[i].inner[index].z,
 					vls[i].inner[index+1].x, vls[i].inner[index+1].y, vls[i].inner[index+1].z);*/
 			if (!collision(vls[i].inner[index], vls[i].inner[index+1], &hp, &next, i)) {
-				//printf("µÚ%d¸ö½»²æµãÊÇ£¨%f, %f, %f£©\n", index, hp.x, hp.y, hp.z);
+				//printf("ç¬¬%dä¸ªäº¤å‰ç‚¹æ˜¯ï¼ˆ%f, %f, %fï¼‰\n", index, hp.x, hp.y, hp.z);
 				vls[i].inner[index+1].x=hp.x;
 				vls[i].inner[index+1].y=hp.y;
 				vls[i].inner[index+1].z=hp.z;
@@ -577,24 +653,192 @@ void analyze() {
 	}*/
 }
 
+void explicite() {
+	for(int i=0; i<vs.size(); i++) {
+		point n1 = {vs[i].a, vs[i].b, vs[i].c};
+		dealWith(vs[i].allPoints, vs[i].polygon, n1);
+		testSurfs(i);
+		//testSurfPolygons(vs[i].allPoints, vs[i].polygon, n1);
+	}
+}
 
-/*------¡¶²âÊÔÆª¡·-------------ÎÒ--------ÊÇ---------·Ö--------¸î---------Ïß--------------------- */
+// è®¡ç®—ç©ºé—´sç‚¹åˆ°ç›´çº¿abçš„è·ç¦»ï¼›
+double DistanceOfPointToLine(Point* a, Point* b, Point* s) 
+{ 
+	double ab = sqrt(pow((a->x - b->x), 2.0) + pow((a->y - b->y), 2.0) + pow((a->z - b->z), 2.0));
+	double as = sqrt(pow((a->x - s->x), 2.0) + pow((a->y - s->y), 2.0) + pow((a->z - s->z), 2.0));
+	double bs = sqrt(pow((s->x - b->x), 2.0) + pow((s->y - b->y), 2.0) + pow((s->z - b->z), 2.0));
+	double cos_A = (pow(as, 2.0) + pow(ab, 2.0) - pow(bs, 2.0)) / (2 * ab*as);
+	double sin_A = sqrt(1 - pow(cos_A, 2.0));
+	return as*sin_A; 
+}
+
+// è®¡ç®—ç©ºé—´ä¸¤ä¸ªç‚¹aï¼Œbçš„ç©ºé—´è·ç¦»ï¼›
+double distanceOfTwoPoints(Point a, Point b) {
+	return pow((a.x-b.x), 2) + pow((a.z-b.z), 2) + pow((a.z-b.z), 2);
+}
+
+
+void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon) {
+	if (p.size() == 0)
+		return;
+	/* æ‰¾å‡º Pmax ç‚¹ */
+	Point pmax;
+	pmax.x = p[0].x;
+	pmax.y = p[0].y;
+	pmax.z = p[0].z;
+	double k, d;
+	k = (b.y - a.y) / (b.x - a.x);
+	d = a.y - k * a.x;
+	double dist = DistanceOfPointToLine(&a, &b, &pmax);
+	double newdist, maxDis = -1;
+	for (int i = 1; i < p.size(); ++i)
+	{
+		newdist = DistanceOfPointToLine(&a, &b, &p[i]);
+		if (newdist - dist > threHold)
+		{
+			pmax.x = p[i].x;
+			pmax.y = p[i].y;
+			pmax.z = p[i].z;
+			maxDis = distanceOfTwoPoints(pmax, mid);
+		}
+		else if (fabs(newdist - dist) < threHold)
+		{	//é€‰æ‹©è·ç¦»çº¿æ®µabä¸­ç‚¹æœ€è¿‘çš„é‚£ä¸ª
+			double dis1 = distanceOfTwoPoints(p[i], mid);
+			if (maxDis != -1 && dis1 < maxDis)
+			{
+				pmax.x = p[i].x;
+				pmax.y = p[i].y;
+				pmax.z = p[i].z;
+			}
+		}
+	}
+	printf("Pmax(%f, %f, %f)\n", pmax.x, pmax.y, pmax.z);
+	polygon.push_back(pmax);
+
+	Point mid1 = {(pmax.x+a.x)/2, (pmax.y+a.y)/2, (pmax.z+a.z)/2};
+	Point mid2 = {(pmax.x+b.x)/2, (pmax.y+b.y)/2, (pmax.z+b.z)/2};
+	Point v1 = {mid1.x-mid.x, mid1.y-mid.y, mid1.z-mid.z};
+	Point v2 = {mid2.x-mid.x, mid2.y-mid.y, mid2.z-mid.z};
+
+	/* æ‰¾å‡ºå„è‡ªç¬¦åˆæ»¡è¶³ Pmax,Pa å’Œ Pmax,Pb çš„ç‚¹ */
+	vector<point> p1, p2;
+	for (int i = 0; i < p.size(); ++i)
+	{
+		Point temp1 = {p[i].x-mid1.x, p[i].y-mid1.y, p[i].z-mid1.z};
+		if(temp1.x*v1.x+temp1.y*v1.y+temp1.z*v1.z > threHold) p1.push_back(p[i]);
+		else {
+			Point temp2 = {p[i].x-mid2.x, p[i].y-mid2.y, p[i].z-mid2.z};
+			if(temp2.x*v2.x+temp2.y*v2.y+temp2.z*v2.z > threHold) p2.push_back(p[i]);
+		}
+
+	}
+	printf("v1.size=%d, v2.size=%d\n", p1.size(), p2.size());
+	/* é€’å½’å¯»æ‰¾Pmax */
+	FindPoint2(p1, pmax, a, mid1, polygon);
+	printf("å·¦è¾¹çš„ç®—å®Œäº†");
+	FindPoint2(p2, pmax, b, mid2, polygon);
+	printf("å³è¾¹çš„ç®—å®Œäº†");
+	//free(&p1);
+	//free(&p2);
+}
+
+
+void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
+	if(allPoints.size() < 2) return;
+	Point a, b; //æœ€å°å’Œæœ€å¤§ä¸¤ä¸ªæç«¯é¡¶ç‚¹ï¼›
+	a.x = allPoints[0].x;
+	a.y = allPoints[0].y;
+	a.z = allPoints[0].z;
+	b.x = allPoints[0].x;
+	b.y = allPoints[0].y;
+	b.z = allPoints[0].z;
+	for(int i=1; i<allPoints.size(); i++) {
+		if(a.x - allPoints[i].x > threHold) {
+			a.x = allPoints[i].x;
+			a.y = allPoints[i].y;
+			a.z = allPoints[i].z;
+		} else if(fabs(a.x - allPoints[i].x) < threHold) {
+			if(a.y - allPoints[i].y > threHold) {
+				a.x = allPoints[i].x;
+				a.y = allPoints[i].y;
+				a.z = allPoints[i].z;
+			} else if(fabs(a.y - allPoints[i].y) < threHold) {
+				if(a.z - allPoints[i].z > threHold) {
+					a.x = allPoints[i].x;
+					a.y = allPoints[i].y;
+					a.z = allPoints[i].z;
+				} 
+			}
+		}
+
+		if(allPoints[i].x - b.x > threHold) {
+			b.x = allPoints[i].x;
+			b.y = allPoints[i].y;
+			b.z = allPoints[i].z;
+		} else if(fabs(b.x - allPoints[i].x) < threHold) {
+			if(allPoints[i].y - b.y > threHold) {
+				b.x = allPoints[i].x;
+				b.y = allPoints[i].y;
+				b.z = allPoints[i].z;
+			} else if(fabs(b.y - allPoints[i].y) < threHold) {
+				if(allPoints[i].z - b.z > threHold) {
+					b.x = allPoints[i].x;
+					b.y = allPoints[i].y;
+					b.z = allPoints[i].z;
+				} 
+			}
+		}
+	}
+
+	if (fabs(a.x - b.x) + fabs(a.y - b.y) + fabs(a.z - b.z) < threHold) {
+		polygon.push_back(a);
+		printf("ä¸¤æå€¼ç‚¹ç›¸è·è¿‡è¿‘ï¼Œè¿”å›äº†ç›´æ¥");
+		return;
+	}
+
+	polygon.push_back(a);
+	polygon.push_back(b);
+	printf("Pmin(%f, %f, %f)\n", a.x, a.y, a.z);
+	printf("Pmax(%f, %f, %f)\n", b.x, b.y, b.z);
+	vector<point> p1, p2; // p1æ˜¯ç›´çº¿å·¦è¾¹æ‰€æœ‰ç‚¹é›†åˆï¼Œp2æ˜¯ç›´çº¿å³è¾¹æ‰€æœ‰ç‚¹é›†åˆ
+	Point mid = {(a.x+b.x)/2, (a.y+b.y)/2, (a.z+b.z)/2}; // çº¿æ®µä¸­ç‚¹
+	Point n2 = {b.x-a.x, b.y-a.y, b.z-a.z}; //ä¸¤ä¸ªæå€¼ç‚¹çš„çº¿æ®µæ‰€åœ¨çš„å‘é‡
+	Point n3 = {n1.y*n2.z-n2.y*n1.z, n2.x*n1.z-n1.x*n2.z, n1.x*n2.y-n2.x*n1.y}; // è®¡ç®—æ‰€åœ¨å¹³é¢å†…çš„çº¿æ®µçš„æ³•å‘é‡
+	for (int i = 0; i < allPoints.size(); ++i)
+	{
+		point temp = {allPoints[i].x-mid.x, allPoints[i].y-mid.y, allPoints[i].z-mid.z}; //ç‚¹é›†åˆä¸­ä»»æ„ä¸€ä¸ªç‚¹åˆ°ç›´çº¿ä¸­ç‚¹çš„å‘é‡
+		double value = n3.x*temp.x + n3.y*temp.y + n3.z*temp.z; //å‘é‡å’Œå¹³é¢å†…ç›´çº¿æ³•å‘é‡çš„ç‚¹ç§¯
+		if(value > threHold) p1.push_back(allPoints[i]);
+		else if(value < -threHold) p2.push_back(allPoints[i]);
+	}
+	printf("left-part:%d, right-part:%d\n", p1.size(), p2.size());
+	FindPoint2(p1, a, b, mid, polygon);
+	printf("å·¦è¾¹çš„ç®—å®Œäº†~~~~~");
+	FindPoint2(p2, a, b, mid, polygon);
+	printf("ä¸¤è¾¹éƒ½ç®—å®Œäº†~~æˆ‘çŒœæ˜¯çœ‹ä¸åˆ°è¿™ä¸€å¥çš„æŠŠã€‚~~~");
+}
+
+
+/*------ã€Šæµ‹è¯•ç¯‡ã€‹-------------æˆ‘--------æ˜¯---------åˆ†--------å‰²---------çº¿--------------------- */
 
 
 void drawTest() {
 	for (int i=0; i<vtemp.size(); i++) {
-		drawPoint(vtemp[i]);
+		for(int j=i+1; j<vtemp.size(); j++) {
+			drawLines(vtemp[i], vtemp[j]);
+		}
 	}
 }
 
-void testSurfs() {
-	for (int i=0; i<vs.size(); i++) {
+void testSurfs(int i) {
+	//for (int i=0; i<vs.size(); i++) {
 		printf("%f %f %f %f %f %f\n", vs[i].xmin, vs[i].ymin,  vs[i].zmin, vs[i].xmax, vs[i].ymax,  vs[i].zmax);
 		printf(vs[i].isGate ? "true ":"false ");
 		printf("%f %f %f %f %f %f\n", vs[i].gxmin, vs[i].gymin,  vs[i].gzmin, vs[i].gxmax, vs[i].gymax,  vs[i].gzmax);
 		printf("%f %f %f %f\n", vs[i].a,vs[i].b,vs[i].c,vs[i].d);
 		printf("\n");
-	}
+	//}
 }
 
 void testPoints() {
@@ -609,3 +853,29 @@ void testPoints() {
 
 }
 
+void testSurfPolygons(vector<point> &allPoints, vector<point> &polygon, point n1) {
+	/*for(int i=0; i<allPoints.size(); i++) {
+		printf("point%d:(%f, %f, %f)\n", i, allPoints[i].x, allPoints[i].y, allPoints[i].z);
+	}*/
+}
+
+void testSurfPolygons2() {
+	int n;
+	vector<point> v, polygon;
+	scanf("%d", &n);
+	for(int i=0; i<n; i++) {
+		point p = {};
+		int x, y, z;
+		scanf("%d %d %d", &x, &y, &z);
+		p.x = x * 1.0;
+		p.y = y * 1.0;
+		p.z = z * 1.0;
+		v.push_back(p);
+	}
+	point n1 = {0, 0, 1.0};
+	dealWith(v, vtemp, n1);
+	for(int i=0; i<polygon.size(); i++) {
+		//printf("point%d:(%f, %f, %f)\n", i, polygon[i].x, polygon[i].y, polygon[i].z);
+		printf("point%d:(%f, %f, %f)\n", i, vtemp[i].x, vtemp[i].y, vtemp[i].z);
+	}
+}
