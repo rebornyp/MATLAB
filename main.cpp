@@ -20,7 +20,7 @@ struct surf {
 	bool isGate;
 	double gxmin, gxmax, gymin, gymax, gzmin, gzmax;
 	vector<point> allPoints;
-	vector<point> polygon;
+	vector<point> polygon[2];
 };
 
 struct lines {
@@ -51,22 +51,22 @@ point getCross(point p1, point p2, surf s);
 void drawPoint(point p);
 void drawLines(point p1, point p2);
 void drawEnvironments();
-void drawSurfaces();
 void initSurfs();
 void createSphereArray(int num, double r);
 void initSingleLight();
 int validate(point cross, surf temp);
 void explicite();
-void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1);
+void dealWith(vector<point> &allPoints, vector<point> polygon[2], point n1);
 void drawPolygons();
 double DistanceOfPointToLine(Point* a, Point* b, Point* s);
 double distanceOfTwoPoints(Point a, Point b);
-void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon);
+void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon, point &n1);
 void testSurfPolygons(vector<point> &p, vector<point> &polygon, point n1);
 void testSurfPolygons2();
 void drawRefectionTracks();
 void drawRefectionPoints();
 void drawRefectionPolygons();
+void drawReflectionPointsInSurfs();
 
 
 GLint mx,my; //position of mouse
@@ -74,7 +74,7 @@ GLint m_state=0; //mouse usage
 GLfloat x_angle=0.0f, y_angle=0.0f; //angle of eye
 GLfloat dist=10.0f; //distance from the eye
 double lineWidth = 0.01, pointSize = 0.1;
-vector<point> vp, vtemp;
+vector<point> vp, vtemp[2];
 vector<surf> vs; // 保存所有平面的数组
 vector<lines> vls; // 保存所有反射路径（含碰撞点信息）的数组；
 double moveLen = 1.0, width=2.0, swidth=0.5;
@@ -84,8 +84,9 @@ GLfloat rValue = 1.0f, gValue = 1.0f, bValue = 1.0f;
 
 
 bool cmp(point a, point b) {
-	if(a.x != b.x) return a.x < b.x;
-	else return a.y < b.y;
+	if(fabs(a.x - b.x) > threHold) return a.x < b.x;
+	else if(fabs(a.y - b.y) > threHold) return a.y < b.y;
+	else return a.z < b.z;
 }
 
 // 主函数
@@ -141,7 +142,7 @@ void display(void)
 	drawRefections();	
 	drawEnvironments();	
 	//drawRefections();	
-	drawTest();
+	//drawTest();
 	glutSwapBuffers();
 }
 
@@ -454,17 +455,35 @@ void drawRefectionPolygons() {
 	bValue = 0.0f;
 	lineWidth = 5.0f;
 	for(int i=0; i<vs.size(); i++) {
-		for(int j=0; j<vs[i].polygon.size(); j++) {
-			for(int k=j+1; k<vs[i].polygon.size(); k++)
-				drawLines(vs[i].polygon[j], vs[i].polygon[k]);
+		sort(vs[i].polygon[0].begin(), vs[i].polygon[0].end(), cmp);
+		sort(vs[i].polygon[1].begin(), vs[i].polygon[1].end(), cmp);
+		for(int j=0; j<vs[i].polygon[0].size()-1; j++) {
+			drawLines(vs[i].polygon[0][j], vs[i].polygon[0][j+1]);
+		}
+		for(int j=0; j<vs[i].polygon[1].size()-1; j++) {
+			drawLines(vs[i].polygon[1][j], vs[i].polygon[1][j+1]);
+		}
+		//drawLines(vs[i].polygon[1][0], vs[i].polygon[1][vs[i].polygon[1].size()-1]);
+	}
+}
+
+void drawReflectionPointsInSurfs() {
+	rValue = 1.0f;
+	gValue = 1.0f;
+	bValue = 0.0f;
+	pointSize = 2.0f;
+	for (int i=0; i<vs.size(); i++) {
+		for(int j=0; j<vs[i].allPoints.size(); j++) {
+			drawPoint(vs[i].allPoints[j]);
 		}
 	}
 }
 
 //后期绘制折射线的函数
 void drawRefections() {
-	//drawRefectionTracks();
-	drawRefectionPoints();
+	drawRefectionTracks();
+	//drawRefectionPoints();
+	//drawReflectionPointsInSurfs();
 	drawRefectionPolygons();
 }
 
@@ -679,7 +698,7 @@ double distanceOfTwoPoints(Point a, Point b) {
 }
 
 
-void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon) {
+void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &polygon, point &n) {
 	if (p.size() == 0)
 		return;
 	/* 找出 Pmax 点 */
@@ -724,31 +743,66 @@ void FindPoint2(vector<point> &p, Point a, Point b, Point mid, vector<point> &po
 	Point mid2 = {(pmax.x+b.x)/2, (pmax.y+b.y)/2, (pmax.z+b.z)/2};
 	Point v1 = {mid1.x-mid.x, mid1.y-mid.y, mid1.z-mid.z};
 	Point v2 = {mid2.x-mid.x, mid2.y-mid.y, mid2.z-mid.z};
+	Point l1 = {pmax.x-a.x, pmax.y-a.y, pmax.z-a.z}; //两个极值点的线段所在的向量
+	Point n1 = {n.y*l1.z-l1.y*n.z, l1.x*n.z-n.x*l1.z, n.x*l1.y-l1.x*n.y}; // 计算所在平面内的线段的法向量
+	Point l2 = {pmax.x-b.x, pmax.y-b.y, pmax.z-b.z}; //两个极值点的线段所在的向量
+	Point n2 = {n.y*l2.z-l2.y*n.z, l2.x*n.z-n.x*l2.z, n.x*l2.y-l2.x*n.y}; // 计算所在平面内的线段的法向量
+	if(v1.x*n1.x+v1.y*n1.y+v1.z*n1.z < -threHold) {
+		n1.x *= -1;
+		n1.y *= -1;
+		n1.z *= -1;
+	}
+	double len = sqrt(n1.x*n1.x+n1.y*n1.y+n1.z*n1.z);
+	n1.x /= len;
+	n1.y /= len;
+	n1.z /= len;
+	if(v2.x*n2.x+v2.y*n2.y+v2.z*n2.z < -threHold) {
+		n2.x *= -1;
+		n2.y *= -1;
+		n2.z *= -1;
+	}
+	len = sqrt(n2.x*n2.x+n2.y*n2.y+n2.z*n2.z);
+	n2.x /= len;
+	n2.y /= len;
+	n2.z /= len;
+
+	//printf("mid:(%f, %f, %f)\n", mid.x, mid.y, mid.z);
+	//printf("mid1:(%f, %f, %f)\n", mid1.x, mid1.y, mid1.z);
+	//printf("mid2:(%f, %f, %f)\n", mid2.x, mid2.y, mid2.z);
+	//printf("v1:(%f, %f, %f)\n", v1.x, v1.y, v1.z);
+	//printf("v2:(%f, %f, %f)\n", v2.x, v2.y, v2.z);
 
 	/* 找出各自符合满足 Pmax,Pa 和 Pmax,Pb 的点 */
 	vector<point> p1, p2;
 	for (int i = 0; i < p.size(); ++i)
 	{
+		//printf("point%d(%f, %f, %f)\n", i, p[i].x, p[i].y, p[i].z);
 		Point temp1 = {p[i].x-mid1.x, p[i].y-mid1.y, p[i].z-mid1.z};
-		if(temp1.x*v1.x+temp1.y*v1.y+temp1.z*v1.z > threHold) p1.push_back(p[i]);
+		//printf("temp1:(%f, %f, %f)\n", temp1.x, temp1.y, temp1.z);
+		double value = temp1.x*n1.x+temp1.y*n1.y+temp1.z*n1.z;
+		//printf("value=%f\n", value);
+		if(value > threHold) p1.push_back(p[i]);
 		else {
 			Point temp2 = {p[i].x-mid2.x, p[i].y-mid2.y, p[i].z-mid2.z};
-			if(temp2.x*v2.x+temp2.y*v2.y+temp2.z*v2.z > threHold) p2.push_back(p[i]);
+			//printf("temp2:(%f, %f, %f)\n", temp2.x, temp2.y, temp2.z);
+			value = temp2.x*n2.x+temp2.y*n2.y+temp2.z*n2.z;
+			//printf("value=%f\n", value);
+			if(value > threHold) p2.push_back(p[i]);
 		}
 
 	}
 	//printf("v1.size=%d, v2.size=%d\n", p1.size(), p2.size());
 	/* 递归寻找Pmax */
-	FindPoint2(p1, pmax, a, mid1, polygon);
+	FindPoint2(p1, pmax, a, mid1, polygon, n);
 	//printf("左边的算完了");
-	FindPoint2(p2, pmax, b, mid2, polygon);
+	FindPoint2(p2, pmax, b, mid2, polygon, n);
 	//printf("右边的算完了");
 	//free(&p1);
 	//free(&p2);
 }
 
 
-void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
+void dealWith(vector<point> &allPoints, vector<point> polygon[2], point n1) {
 	if(allPoints.size() < 2) return;
 	Point a, b; //最小和最大两个极端顶点；
 	a.x = allPoints[0].x;
@@ -796,15 +850,17 @@ void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
 	}
 
 	if (fabs(a.x - b.x) + fabs(a.y - b.y) + fabs(a.z - b.z) < threHold) {
-		polygon.push_back(a);
+		polygon[0].push_back(a);
 		printf("两极值点相距过近，返回了直接");
 		return;
 	}
 
-	polygon.push_back(a);
-	polygon.push_back(b);
-	printf("Pmin(%f, %f, %f)\n", a.x, a.y, a.z);
-	printf("Pmax(%f, %f, %f)\n", b.x, b.y, b.z);
+	polygon[0].push_back(a);
+	polygon[0].push_back(b);
+	polygon[1].push_back(a);
+	polygon[1].push_back(b);
+	//printf("Pmin(%f, %f, %f)\n", a.x, a.y, a.z);
+	//printf("Pmax(%f, %f, %f)\n", b.x, b.y, b.z);
 	vector<point> p1, p2; // p1是直线左边所有点集合，p2是直线右边所有点集合
 	Point mid = {(a.x+b.x)/2, (a.y+b.y)/2, (a.z+b.z)/2}; // 线段中点
 	Point n2 = {b.x-a.x, b.y-a.y, b.z-a.z}; //两个极值点的线段所在的向量
@@ -817,9 +873,9 @@ void dealWith(vector<point> &allPoints, vector<point> &polygon, point n1) {
 		else if(value < -threHold) p2.push_back(allPoints[i]);
 	}
 	//printf("left-part:%d, right-part:%d\n", p1.size(), p2.size());
-	FindPoint2(p1, a, b, mid, polygon);
+	FindPoint2(p1, a, b, mid, polygon[0], n1);
 	//printf("左边的算完了~~~~~");
-	FindPoint2(p2, a, b, mid, polygon);
+	FindPoint2(p2, a, b, mid, polygon[1], n1);
 	//printf("两边都算完了~~我猜是看不到这一句的把。~~~");
 }
 
@@ -831,7 +887,7 @@ void drawTest() {
 	rValue = 1.0f;
 	gValue = 1.0f;
 	bValue = 0.0f;
-	pointSize = 1.0f;
+	pointSize = 5.0f;
 	for(int i=0; i<vp.size(); i++) {
 		drawPoint(vp[i]);
 	}
@@ -839,12 +895,19 @@ void drawTest() {
 	rValue = 1.0f;
 	gValue = 0.0f;
 	bValue = 0.0f;
-	lineWidth = 5.0f;
-	for (int i=0; i<vtemp.size(); i++) {
-		for(int j=i+1; j<vtemp.size(); j++) {
-			drawLines(vtemp[i], vtemp[j]);
-		}
+	lineWidth = 3.0f;
+	sort(vtemp[0].begin(), vtemp[0].end(), cmp);
+	for (int i=0; i<vtemp[0].size()-1; i++) {
+		drawLines(vtemp[0][i], vtemp[0][i+1]);
 	}
+	drawLines(vtemp[0][0], vtemp[0][vtemp[0].size()-1]);
+	sort(vtemp[1].begin(), vtemp[1].end(), cmp);
+	for (int i=0; i<vtemp[1].size()-1; i++) {
+		drawLines(vtemp[1][i], vtemp[1][i+1]);
+	}
+	//point a = {0.1, 0.3, 0};
+	//point b = {2.0, 0.1, 0};
+	//drawLines(a, b);
 }
 
 void testSurfs(int i) {
@@ -863,7 +926,7 @@ void testPoints() {
 		printf("\n(%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f)\n",vls[i].inner[0].x,vls[i].inner[0].y,vls[i].inner[0].z,vls[i].inner[1].x,vls[i].inner[1].y,vls[i].inner[1].z);
 		if (!collision(vls[i].inner[0], vls[i].inner[1], &hp, &next, i)) {
 			printf("   collision: (%.2f,%.2f,%.2f)\n", hp.x, hp.y, hp.z);
-			vtemp.push_back(hp);
+			vtemp[0].push_back(hp);
 		}
 	}
 
@@ -879,28 +942,34 @@ void testSurfPolygons2() {
 	int n;
 	vector<point> v, polygon;
 	scanf("%d", &n);
+	double x, y, z;
 	for(int i=0; i<n; i++) {
-		for(int j=0; j<n; j++) {
-			point p = {i*.1, j*.1, 0};
+		//for(int j=0; j<n; j++) {
+			scanf("%lf%lf%lf", &x, &y, &z);
+			point p = {x, y, z};
 			/*int x, y, z;
 			scanf("%d %d %d", &x, &y, &z);
 			p.x = x * 1.0;
 			p.y = y * 1.0;
 			p.z = z * 1.0;*/
 			vp.push_back(p);
-		}
+		//}
 	}
-	for(int i=0; i<n; i++) {
+	/*for(int i=0; i<n; i++) {
 		for(int j=0; j<n; j++) {
 			point p = {i*-.1, j*-.1, 0};
 			vp.push_back(p);
 		}
-	}
+	}*/
 
-	point n1 = {0, 0, 1.0};
+	point n1 = {0, 0, -1.0};
 	dealWith(vp, vtemp, n1);
-	for(int i=0; i<vtemp.size(); i++) {
-		//printf("point%d:(%f, %f, %f)\n", i, polygon[i].x, polygon[i].y, polygon[i].z);
-		printf("point%d:(%f, %f, %f)\n", i, vtemp[i].x, vtemp[i].y, vtemp[i].z);
-	}
+	//for(int i=0; i<vtemp[0].size(); i++) {
+	//	//printf("point%d:(%f, %f, %f)\n", i, polygon[i].x, polygon[i].y, polygon[i].z);
+	//	printf("point%d:(%f, %f, %f)\n", i, vtemp[0][i].x, vtemp[0][i].y, vtemp[0][i].z);
+	//}
+	//for(int i=0; i<vtemp[1].size(); i++) {
+	//	//printf("point%d:(%f, %f, %f)\n", i, polygon[i].x, polygon[i].y, polygon[i].z);
+	//	printf("point%d:(%f, %f, %f)\n", i, vtemp[1][i].x, vtemp[1][i].y, vtemp[1][i].z);
+	//}
 }
