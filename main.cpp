@@ -332,8 +332,8 @@ struct surf {
 	double a,b,c,d;
 	bool isGate;
 	double gxmin, gxmax, gymin, gymax, gzmin, gzmax;
-	vector<Point> allPoints;
-	vector<Point> polygon[2];
+	vector<Point> allPoints; //折射过程中落在平面上的点集
+	vector<Point> polygon[2]; // 最大凸包轮廓上的所有点
 };
 
 //每条折射路径
@@ -369,7 +369,9 @@ void drawTriangle(Point a, Point b, Point c); //绘制三角面片的功能函�
 
 
 /*数据准备部分*/
+void dataInput(); //数据输入函数
 void dataPrepare(); //数据准备函数
+void dataOutput(); //数据输出函数
 void initSurfs(); //初始化环境平面信息；
 void initSingleLight(); //产生单根入射线的方法
 void initMultipleLight(); //测试入射线的函数
@@ -420,7 +422,7 @@ GLint mx,my; //position of mouse
 GLint m_state=0; //mouse usage
 GLfloat x_angle=0.0f, y_angle=0.0f; //angle of eye
 GLfloat dist=10.0f; //distance from the eye
-double lineWidth = 0.01, pointSize = 0.1;
+double lineWidth = 0.01f, pointSize = 0.1;
 vector<Point> vp, vtemp[2];
 vector<surf> vs; // 保存所有平面的数组
 vector<lines> vls; // 保存所有初始反射路径（含碰撞点信息）的数组；
@@ -563,8 +565,7 @@ double distanceOfTwoPoints(Point a, Point b) {
 }
 
 void drawTriangle(Point a, Point b, Point c) {
-	glColor3f( 1.0f, 0.0f, 1.0f );
-	//glColor4f( 0.5f, 0.5f, 0.0f,0.5f );
+	glColor3f(1.0f,1.0f,0.0f);
 	glBegin(GL_TRIANGLES);
 		glVertex3f(a.x, a.y, a.z);
 		glVertex3f(b.x, b.y, b.z);
@@ -582,18 +583,58 @@ void drawTriangle(Point a, Point b, Point c) {
 
 //数据准备函数
 void dataPrepare(){
+	dataInput();
 	initSurfs(); //存入初始环境平面信息
 	//initSurfs2(); // 换其他的平面场景
 	//selectPoints(); //筛选入射直线的点信息
 	initMultipleLight(); //产生初始所有出射光线数组的函数
 	analyze(); // 得出了所有的反射经过点的信息；
 	explicite(); //对在平面内的折射点进行包络体求解的算法
+	dataOutput();
 }
+
+void dataInput() {
+
+}
+
+//将包络体数据输出到txt文本上；
+void dataOutput() {
+	//下面是写数据，将数字0~9写入到data.txt文件中
+	FILE *fpWrite=fopen("C:\\Users\\Gastby\\Desktop\\输出数据.txt","w");
+	if(fpWrite==NULL)
+	{
+		return;
+	}
+	//for(int i=0;i<10;i++)
+		//fprintf(fpWrite,"%d ",i);
+	fprintf(fpWrite,"输出构成空间凸包络体的点集信息\n");
+	int pn = 0;
+	for(int i=0; i<vs.size(); i++) {
+		for(int j=0; j<vs[i].polygon[0].size(); j++) {
+			fprintf(fpWrite,"第%d点：(%f, %f, %f)\n", ++pn, vs[i].polygon[0][j].x, vs[i].polygon[0][j].y, vs[i].polygon[0][j].z);
+		}
+		for(int j=0; j<vs[i].polygon[1].size(); j++) {
+			fprintf(fpWrite,"第%d点：(%f, %f, %f)\n", ++pn, vs[i].polygon[1][j].x, vs[i].polygon[1][j].y, vs[i].polygon[1][j].z);
+		}
+	}
+	//pn = 0;
+	fprintf(fpWrite,"输出构成空间凸包络体的面信息\n");
+	fprintf(fpWrite,"空间包络体总共由%d个面组成，下面分别输出每个平面上的点集合\n", hull.count.size());
+	for(int i=0; i<hull.count.size(); i++) {
+		fprintf(fpWrite, "第%d个组成面，上有共%d个点：（", i+1, hull.count[i].size());
+		for(auto it=hull.count[i].begin(); it!=hull.count[i].end(); it++)
+			fprintf(fpWrite, "(%f, %f, %f), ", hull.P[*it].x, hull.P[*it].y, hull.P[*it].z);
+		fprintf(fpWrite, "）\n");
+	}
+
+	fclose(fpWrite);
+}
+
 
 //测试入射线的函数
 void initMultipleLight() {
 	double k = 4; //最长可以辐射多远，比例参数
-	Point p1(0,0.8,0.9);
+	Point p1(0,0.0,0.0);
 	Point p2;
 	int n = 20;
 	double step = int(swidth*100/n)/100.0;
@@ -1052,7 +1093,7 @@ void drawSurfaces() {
 		glVertex3f( boxWidth+moveLen, -boxHeight/2, boxLength/2 );
 		glVertex3f( boxWidth+moveLen, -boxHeight/2, -boxLength/2 );
 	glEnd();
-	glColor4f( 0.8f, 0.8f, 0.8f,0.5f );
+	//glColor4f( 0.2f, 0.2f, 0.2f,0.5f );
 	//绘制上面
 	glBegin( GL_QUADS );
 		glVertex3f( moveLen, boxHeight/2, -boxLength/2 );
@@ -1254,6 +1295,10 @@ void drawPolygonSurfs() {
 }
 
 void drawSpacePolygonFaces() {
+	lineWidth = 2.0f;
+	rValue = 0.0f;
+	gValue = 0.0f;
+	bValue = 0.0f;
 	for(int i=0; i<hull.count.size(); i++) {
 		if (hull.count[i].size() < 4) {
 			auto it=hull.count[i].begin();
@@ -1270,8 +1315,8 @@ void drawSpacePolygonFaces() {
 			for(int j=0; j<hull.polygons[i][1].size()-1; j++) {
 				drawLines(hull.polygons[i][1][j], hull.polygons[i][1][j+1]);
 			}
+			glColor3f(1.0f,1.0f,0.0f);
 			glBegin(GL_POLYGON);
-				glColor3f(1.0f,0.0f,1.0f);
 				for(int j=0; j<hull.polygons[i][0].size(); j++)
 					glVertex3f(hull.polygons[i][0][j].x, hull.polygons[i][0][j].y, hull.polygons[i][0][j].z);
 				for(int j=0; j<hull.polygons[i][1].size(); j++)
