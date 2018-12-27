@@ -61,6 +61,7 @@ struct Point {
 
 struct CH3D  
 {  
+	CH3D() {}
     struct face  
     {  
         //表示凸包一个面上的三个点的编号  
@@ -324,7 +325,7 @@ struct CH3D
     {  
         return fabs(volume(P[F[i].a],P[F[i].b],P[F[i].c],p)/vlen((P[F[i].b]-P[F[i].a])*(P[F[i].c]-P[F[i].a])));  
     }  
-}; 
+} *hull; 
 
 //每个壳体平面
 struct surf {
@@ -370,7 +371,9 @@ void drawTriangle(Point a, Point b, Point c); //绘制三角面片的功能函�
 
 /*数据准备部分*/
 void dataInput(); //数据输入函数
+void multiplyChange(); //改变入射最大距离倍率函数
 void dataPrepare(); //数据准备函数
+void clearAll(); //清楚所有元素函数
 void dataOutput(); //数据输出函数
 void initSurfs(); //初始化环境平面信息；
 void initSingleLight(); //产生单根入射线的方法
@@ -428,12 +431,13 @@ vector<surf> vs; // 保存所有平面的数组
 vector<lines> vls; // 保存所有初始反射路径（含碰撞点信息）的数组；
 double moveLen = 1.0, width=2.0, swidth=0.4;
 bool decrease = false;
-double percent = 0.9;
+double percent = 0.9, multiply = 4;
 GLfloat rValue = 1.0f, gValue = 1.0f, bValue = 1.0f;
 double boxWidth = 1.44, boxLength = 1.44, boxHeight = 1.76;
-CH3D hull; //全局变量，所有的空间凸包信息存储在这里；
-
-
+//CH3D *hull; //全局变量，所有的空间凸包信息存储在这里；
+int drawStatue = 0;
+int showEnv = 1;
+double initX = 0.0, initY = 0.0, initZ = 0.0;
 
 
 
@@ -485,11 +489,44 @@ void keyboard(unsigned char key, int x, int y)
 {
 	switch(key)
 	{
+		case 'h':
+			if(showEnv) showEnv = 0;
+			else showEnv = 1;
+			glutPostRedisplay();
+			break;
+		case 'a':
+			if(m_state) m_state = 0;
+			else m_state = 1;
+			break;
 		case '0':
-			m_state = 0;
+			drawStatue = 0;
+			glutPostRedisplay();
 			break;
 		case '1':
-			m_state = 1;
+			drawStatue = 1;
+			glutPostRedisplay();
+			break;
+		case '2':
+			drawStatue = 2;
+			glutPostRedisplay();
+			break;
+		case '3':
+			drawStatue = 3;
+			glutPostRedisplay();
+			break;
+		case '4':
+			drawStatue = 4;
+			glutPostRedisplay();
+			break;
+		case '5':
+			drawStatue = 5;
+			glutPostRedisplay();
+			break;
+		case 'c':
+			dataInput();			
+			break;
+		case 'm':
+			multiplyChange();
 			break;
 		default:
 			break;
@@ -583,10 +620,10 @@ void drawTriangle(Point a, Point b, Point c) {
 
 //数据准备函数
 void dataPrepare(){
-	dataInput();
+	//hull = (CH3D *)malloc(sizeof(CH3D));
+	hull = new CH3D();
 	initSurfs(); //存入初始环境平面信息
 	//initSurfs2(); // 换其他的平面场景
-	//selectPoints(); //筛选入射直线的点信息
 	initMultipleLight(); //产生初始所有出射光线数组的函数
 	analyze(); // 得出了所有的反射经过点的信息；
 	explicite(); //对在平面内的折射点进行包络体求解的算法
@@ -594,7 +631,29 @@ void dataPrepare(){
 }
 
 void dataInput() {
+	printf("请重新输入辐射源坐标：x:");
+	scanf("%lf", &initX);
+	printf("y:");
+	scanf("%lf", &initY);
+	printf("z:");
+	scanf("%lf", &initZ);
+	clearAll();
+	dataPrepare();
+	glutPostRedisplay();
+}
 
+void multiplyChange() {
+	printf("请重新输入辐射最大距离：dis:");
+	scanf("%lf", &multiply);
+	clearAll();
+	dataPrepare();
+	glutPostRedisplay();
+}
+
+void clearAll() {
+	vls.clear();
+	vs.clear();
+	free(hull);
 }
 
 //将包络体数据输出到txt文本上；
@@ -619,11 +678,11 @@ void dataOutput() {
 	}
 	//pn = 0;
 	fprintf(fpWrite,"输出构成空间凸包络体的面信息\n");
-	fprintf(fpWrite,"空间包络体总共由%d个面组成，下面分别输出每个平面上的点集合\n", hull.count.size());
-	for(int i=0; i<hull.count.size(); i++) {
-		fprintf(fpWrite, "第%d个组成面，上有共%d个点：（", i+1, hull.count[i].size());
-		for(auto it=hull.count[i].begin(); it!=hull.count[i].end(); it++)
-			fprintf(fpWrite, "(%f, %f, %f), ", hull.P[*it].x, hull.P[*it].y, hull.P[*it].z);
+	fprintf(fpWrite,"空间包络体总共由%d个面组成，下面分别输出每个平面上的点集合\n", hull->count.size());
+	for(int i=0; i<hull->count.size(); i++) {
+		fprintf(fpWrite, "第%d个组成面，上有共%d个点：（", i+1, hull->count[i].size());
+		for(auto it=hull->count[i].begin(); it!=hull->count[i].end(); it++)
+			fprintf(fpWrite, "(%f, %f, %f), ", hull->P[*it].x, hull->P[*it].y, hull->P[*it].z);
 		fprintf(fpWrite, "）\n");
 	}
 
@@ -633,8 +692,11 @@ void dataOutput() {
 
 //测试入射线的函数
 void initMultipleLight() {
-	double k = 4; //最长可以辐射多远，比例参数
-	Point p1(0,0.0,0.0);
+	double k = multiply; //最长可以辐射多远，比例参数
+	Point p1(0, 0, 0);
+	p1.x = initX;
+	p1.y = initY;
+	p1.z = initZ;
 	Point p2;
 	int n = 20;
 	double step = int(swidth*100/n)/100.0;
@@ -652,7 +714,7 @@ void initMultipleLight() {
 //产生单根入射线的方法
 void initSingleLight() {
 	double k = 6;
-	Point p1(0,0.3,0);
+	Point p1(0,0.5,0);
 	Point p2((k+1)*moveLen-k*p1.x, (k+1)*-0.1-k*p1.y, (k+1)*0-k*p1.z);
 	struct lines l = {};
 	l.inner.push_back(p1);
@@ -718,35 +780,35 @@ void sortAndConstructThePolygonPoints() {
 	for(int i=0; i<vs.size(); i++) {
 		for(int j=0; j<vs[i].polygon[0].size(); j++)
 			allPolygonEdgePoints.push_back(vs[i].polygon[0][j]);
-		for(int j=1; j<vs[i].polygon[1].size()-1; j++)
+		for(int j=0; j<vs[i].polygon[1].size(); j++)
 			allPolygonEdgePoints.push_back(vs[i].polygon[1][j]);
 		sort(vs[i].polygon[0].begin(), vs[i].polygon[0].end(), cmp);
 		sort(vs[i].polygon[1].begin(), vs[i].polygon[1].end(), cmp);
 	}
-	hull.n = allPolygonEdgePoints.size();
-	for(int i=0; i<hull.n; i++) {
-		hull.P[i].x = allPolygonEdgePoints[i].x;
-		hull.P[i].y = allPolygonEdgePoints[i].y;
-		hull.P[i].z = allPolygonEdgePoints[i].z;
+	hull->n = allPolygonEdgePoints.size();
+	for(int i=0; i<hull->n; i++) {
+		hull->P[i].x = allPolygonEdgePoints[i].x;
+		hull->P[i].y = allPolygonEdgePoints[i].y;
+		hull->P[i].z = allPolygonEdgePoints[i].z;
 	}
-	hull.create();
+	hull->create();
 	polygons();
 }
 
 void polygons() {
-	for(int i=0; i<hull.count.size(); i++) {
-		if(hull.count[i].size() < 4) continue;
+	for(int i=0; i<hull->count.size(); i++) {
+		if(hull->count[i].size() < 4) continue;
 		else {
 			vector<Point> allPoints;
-			auto it=hull.count[i].begin();
-			for(; it!=hull.count[i].end(); it++)
-				allPoints.push_back(hull.P[*it]);
-			it=hull.count[i].begin();
-			Point a = hull.P[*it++];
-			Point b = hull.P[*it++];
-			Point c = hull.P[*it];
+			auto it=hull->count[i].begin();
+			for(; it!=hull->count[i].end(); it++)
+				allPoints.push_back(hull->P[*it]);
+			it=hull->count[i].begin();
+			Point a = hull->P[*it++];
+			Point b = hull->P[*it++];
+			Point c = hull->P[*it];
 			Point n1 = (b-a)*(c-a);
-			dealWith(allPoints, hull.polygons[i], n1);
+			dealWith(allPoints, hull->polygons[i], n1);
 		}
 	}
 }
@@ -1006,8 +1068,10 @@ int main(int argc,char **argv)
 
 	dataPrepare(); //准备一些数据
 
-	printf("0 keydown means control the angle of the eye\n");
-	printf("1 keydown means control the distance of the eye\n");
+	printf("输入字符a调整角度或视距，字符h隐藏或显示环境平面； \n");
+	printf("输入字符c调整初始辐射源三维坐标，字符m调整辐射最大距离大小； \n");
+	printf("输入数字0查看空间凸包络体，数字1查看空间包络体在内壁投影平面，\n");
+	printf("数字2查看内壁上最大凸多边形轮廓，数字3查看辐射源折射路径。\n");
 
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
@@ -1053,7 +1117,7 @@ void display(void)
 //绘制环境信息
 void drawEnvironments() {
 	drawCoordinates(); // 绘制坐标轴
-	drawSurfaces(); // 绘制平面信息
+	if(showEnv) drawSurfaces(); // 绘制平面信息
 	drawEnvironmentLines(); // 绘制平面的轮廓直线
 }
 
@@ -1214,12 +1278,18 @@ void drawEnvironmentLines(){
 
 //后期绘制折射所有信息
 void drawRefections() {
-	//drawRefectionTracks(); //绘制所有入射光线的折射路径
-	//drawRefectionPoints(); //绘制所有光线的所有折射点
-	//drawReflectionPointsInSurfs(); //绘制所有折射路径和所有平面的有效交点
-	//drawRefectionPolygonLines(); //仅绘制在平面上的包络体的最外形轮廓
-	//drawPolygonSurfs();
-	drawSpacePolygonFaces();
+	if(drawStatue == 0)
+		drawSpacePolygonFaces(); //绘制空间凸多面体
+	else if(drawStatue == 1)
+		drawPolygonSurfs(); //绘制多边形在内壁上的投影平面
+	else if(drawStatue == 2)
+		drawRefectionPolygonLines(); //仅绘制在平面上的包络体的最外形轮廓
+	else if(drawStatue == 3)
+		drawRefectionTracks(); //绘制所有入射光线的折射路径
+	else if(drawStatue == 4)
+		drawRefectionPoints(); //绘制所有光线的所有折射点
+	else if(drawStatue == 5)
+		drawReflectionPointsInSurfs(); //绘制所有折射路径和所有平面的有效交点
 }
 
 
@@ -1299,28 +1369,28 @@ void drawSpacePolygonFaces() {
 	rValue = 0.0f;
 	gValue = 0.0f;
 	bValue = 0.0f;
-	for(int i=0; i<hull.count.size(); i++) {
-		if (hull.count[i].size() < 4) {
-			auto it=hull.count[i].begin();
-			Point a = hull.P[*it++];
-			Point b = hull.P[*it++];
-			Point c = hull.P[*it];
+	for(int i=0; i<hull->count.size(); i++) {
+		if (hull->count[i].size() < 4) {
+			auto it=hull->count[i].begin();
+			Point a = hull->P[*it++];
+			Point b = hull->P[*it++];
+			Point c = hull->P[*it];
 			drawTriangle(a, b, c);
 		} else {
-			sort(hull.polygons[i][0].begin(), hull.polygons[i][0].end(), cmp);
-			sort(hull.polygons[i][1].begin(), hull.polygons[i][1].end(), cmp);
-			for(int j=0; j<hull.polygons[i][0].size()-1; j++) {
-				drawLines(hull.polygons[i][0][j], hull.polygons[i][0][j+1]);
+			sort(hull->polygons[i][0].begin(), hull->polygons[i][0].end(), cmp);
+			sort(hull->polygons[i][1].begin(), hull->polygons[i][1].end(), cmp);
+			for(int j=0; j<hull->polygons[i][0].size()-1; j++) {
+				drawLines(hull->polygons[i][0][j], hull->polygons[i][0][j+1]);
 			}
-			for(int j=0; j<hull.polygons[i][1].size()-1; j++) {
-				drawLines(hull.polygons[i][1][j], hull.polygons[i][1][j+1]);
+			for(int j=0; j<hull->polygons[i][1].size()-1; j++) {
+				drawLines(hull->polygons[i][1][j], hull->polygons[i][1][j+1]);
 			}
 			glColor3f(1.0f,1.0f,0.0f);
 			glBegin(GL_POLYGON);
-				for(int j=0; j<hull.polygons[i][0].size(); j++)
-					glVertex3f(hull.polygons[i][0][j].x, hull.polygons[i][0][j].y, hull.polygons[i][0][j].z);
-				for(int j=0; j<hull.polygons[i][1].size(); j++)
-					glVertex3f(hull.polygons[i][1][j].x, hull.polygons[i][1][j].y, hull.polygons[i][1][j].z);
+				for(int j=0; j<hull->polygons[i][0].size(); j++)
+					glVertex3f(hull->polygons[i][0][j].x, hull->polygons[i][0][j].y, hull->polygons[i][0][j].z);
+				for(int j=0; j<hull->polygons[i][1].size(); j++)
+					glVertex3f(hull->polygons[i][1][j].x, hull->polygons[i][1][j].y, hull->polygons[i][1][j].z);
 			glEnd();
 		}
 	}
